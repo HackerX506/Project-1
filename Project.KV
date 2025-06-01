@@ -1,0 +1,123 @@
+# TimeMate: Combined Python Clock App for Android (Kivy)
+
+from kivy.app import App
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.textinput import TextInput
+from kivy.clock import Clock
+from datetime import datetime, timedelta
+from plyer import notification
+import threading
+
+# ------------------ Clock Screen ------------------
+class ClockScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical')
+        self.time_label = Label(font_size='64sp', halign='center', valign='middle')
+        self.time_label.bind(size=self.time_label.setter('text_size'))
+        layout.add_widget(self.time_label)
+        btn = Button(text='Go to Alarm', on_press=self.go_to_alarm)
+        layout.add_widget(btn)
+        self.add_widget(layout)
+        Clock.schedule_interval(self.update_clock, 1)
+
+    def update_clock(self, dt):
+        now = datetime.now()
+        self.time_label.text = now.strftime('%H:%M:%S')
+
+    def go_to_alarm(self, instance):
+        self.manager.current = 'alarm'
+
+# ------------------ Alarm Screen ------------------
+class AlarmScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical')
+        self.input = TextInput(hint_text='Enter time (HH:MM)', multiline=False)
+        layout.add_widget(self.input)
+        set_btn = Button(text='Set Alarm')
+        set_btn.bind(on_press=self.set_alarm)
+        layout.add_widget(set_btn)
+        back_btn = Button(text='Back to Clock')
+        back_btn.bind(on_press=self.go_to_clock)
+        layout.add_widget(back_btn)
+        self.add_widget(layout)
+
+    def set_alarm(self, instance):
+        try:
+            alarm_time = datetime.strptime(self.input.text.strip(), "%H:%M")
+            now = datetime.now()
+            alarm_time = alarm_time.replace(year=now.year, month=now.month, day=now.day)
+            if alarm_time <= now:
+                alarm_time += timedelta(days=1)
+            delay = (alarm_time - now).total_seconds()
+            threading.Timer(delay, self.trigger_alarm).start()
+            print("Alarm set for", alarm_time.strftime('%H:%M'))
+        except ValueError:
+            print("Invalid time format")
+
+    def trigger_alarm(self):
+        notification.notify(title="Alarm", message="TimeMate Alarm!", timeout=10)
+
+    def go_to_clock(self, instance):
+        self.manager.current = 'clock'
+
+# ------------------ Stopwatch Screen ------------------
+class StopwatchScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.time = 0
+        self.event = None
+        layout = BoxLayout(orientation='vertical')
+        self.label = Label(text='0', font_size='64sp')
+        layout.add_widget(self.label)
+        buttons = BoxLayout(size_hint_y=0.3)
+        start_btn = Button(text='Start')
+        stop_btn = Button(text='Stop')
+        reset_btn = Button(text='Reset')
+        start_btn.bind(on_press=self.start)
+        stop_btn.bind(on_press=self.stop)
+        reset_btn.bind(on_press=self.reset)
+        buttons.add_widget(start_btn)
+        buttons.add_widget(stop_btn)
+        buttons.add_widget(reset_btn)
+        layout.add_widget(buttons)
+        back_btn = Button(text='Back to Clock')
+        back_btn.bind(on_press=self.go_to_clock)
+        layout.add_widget(back_btn)
+        self.add_widget(layout)
+
+    def start(self, instance):
+        if not self.event:
+            self.event = Clock.schedule_interval(self.update, 1)
+
+    def stop(self, instance):
+        if self.event:
+            self.event.cancel()
+            self.event = None
+
+    def reset(self, instance):
+        self.time = 0
+        self.label.text = '0'
+
+    def update(self, dt):
+        self.time += 1
+        self.label.text = str(self.time)
+
+    def go_to_clock(self, instance):
+        self.manager.current = 'clock'
+
+# ------------------ App Manager ------------------
+class TimeMate(App):
+    def build(self):
+        sm = ScreenManager()
+        sm.add_widget(ClockScreen(name='clock'))
+        sm.add_widget(AlarmScreen(name='alarm'))
+        sm.add_widget(StopwatchScreen(name='stopwatch'))
+        return sm
+
+if __name__ == '__main__':
+    TimeMate().run()
